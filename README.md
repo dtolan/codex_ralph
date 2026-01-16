@@ -17,6 +17,23 @@ codex-loop is a CLI wrapper that builds a structured Codex prompt, creates a saf
 Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the repo root via `--cd <repo-root>`. `--yolo` is blocked unless the user explicitly passes `--force-yolo`, and the CLI will display a loud warning about the risks.
 The CLI will still ask for confirmation before starting a loop, even if defaults are provided by flags.
 
+## Quick Start
+
+```bash
+# run via npx (once published)
+npx codex-loop --dry-run
+
+# run locally from this repo
+npm install
+node src/cli.js --dry-run
+
+# build/update prompt only
+node src/cli.js --prompt-only
+
+# run the loop using existing prompt
+node src/cli.js --run-loop
+```
+
 ## How It Works (Planned)
 
 1. Repo detection

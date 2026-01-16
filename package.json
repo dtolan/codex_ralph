@@ -6,6 +6,12 @@
   "bin": {
     "codex-loop": "src/cli.js"
   },
+  "files": [
+    "src",
+    ".codex",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=18"
   },
