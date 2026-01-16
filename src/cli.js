@@ -172,13 +172,41 @@ function firstLineSummary(text) {
   return line.trim().slice(0, 72);
 }
 
-async function resolveRepoRoot(cwd, config) {
+function defaultAnswer(question) {
+  if (question.type === 'confirm') {
+    return question.initial !== undefined ? question.initial : true;
+  }
+  if (question.type === 'select') {
+    if (question.initial !== undefined) return question.initial;
+    if (question.choices && question.choices.length > 0) return question.choices[0].value;
+    return null;
+  }
+  if (question.type === 'number') {
+    return question.initial !== undefined ? question.initial : 0;
+  }
+  if (question.type === 'list') {
+    return [];
+  }
+  return question.initial !== undefined ? question.initial : '';
+}
+
+async function ask(question, defaultsMode) {
+  if (!defaultsMode) return prompts(question);
+  return { [question.name]: defaultAnswer(question) };
+}
+
+async function resolveRepoRoot(cwd, config, defaultsMode) {
   const gitRoot = git(['rev-parse', '--show-toplevel'], { cwd });
   if (gitRoot.status === 0) {
     return gitRoot.stdout.trim();
   }
 
-  const { repoChoice } = await prompts({
+  if (defaultsMode) {
+    console.error('No git repo detected. Rerun without --defaults to select a repo.');
+    process.exit(1);
+  }
+
+  const { repoChoice } = await ask({
     type: 'select',
     name: 'repoChoice',
     message: 'No git repo detected. Choose how to proceed:',
@@ -194,11 +222,11 @@ async function resolveRepoRoot(cwd, config) {
   }
 
   if (repoChoice === 'path') {
-    const { repoPath } = await prompts({
+    const { repoPath } = await ask({
       type: 'text',
       name: 'repoPath',
       message: 'Enter local repo path:'
-    });
+    }, defaultsMode);
 
     if (!repoPath) process.exit(1);
 
@@ -209,12 +237,12 @@ async function resolveRepoRoot(cwd, config) {
     }
 
     if (!fs.existsSync(path.join(resolved, '.git'))) {
-      const { initRepo } = await prompts({
+      const { initRepo } = await ask({
         type: 'confirm',
         name: 'initRepo',
         message: 'No .git found. Initialize a new repo here?',
         initial: false
-      });
+      }, defaultsMode);
       if (!initRepo) process.exit(1);
       const init = git(['init'], { cwd: resolved });
       if (init.status !== 0) {
@@ -226,18 +254,18 @@ async function resolveRepoRoot(cwd, config) {
     return resolved;
   }
 
-  const { repoUrl } = await prompts({
+  const { repoUrl } = await ask({
     type: 'text',
     name: 'repoUrl',
     message: 'Enter git URL to clone:'
-  });
+  }, defaultsMode);
   if (!repoUrl) process.exit(1);
 
-  const { targetDir } = await prompts({
+  const { targetDir } = await ask({
     type: 'text',
     name: 'targetDir',
     message: 'Target directory for clone (blank for repo name):'
-  });
+  }, defaultsMode);
 
   const dirName = targetDir && targetDir.trim().length > 0 ? targetDir.trim() : path.basename(repoUrl).replace(/\.git$/, '');
   const dest = path.resolve(cwd, dirName);
@@ -249,32 +277,32 @@ async function resolveRepoRoot(cwd, config) {
   return dest;
 }
 
-async function confirmRepo(repoRoot, config) {
+async function confirmRepo(repoRoot, config, defaultsMode) {
   const branchResult = git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot });
   const branch = branchResult.status === 0 ? branchResult.stdout.trim() : 'unknown';
 
   if (config.repo.requireConfirm) {
-    const { useRepo } = await prompts({
+    const { useRepo } = await ask({
       type: 'confirm',
       name: 'useRepo',
       message: `Use repo ${repoRoot} (branch ${branch})?`,
       initial: true
-    });
+    }, defaultsMode);
     if (!useRepo) {
-      const nextRoot = await resolveRepoRoot(process.cwd(), config);
-      return confirmRepo(nextRoot, config);
+      const nextRoot = await resolveRepoRoot(process.cwd(), config, defaultsMode);
+      return confirmRepo(nextRoot, config, defaultsMode);
     }
   }
 
   if (config.repo.warnIfDirty) {
     const dirty = git(['status', '--porcelain'], { cwd: repoRoot });
     if (dirty.stdout.trim().length > 0) {
-      const { proceed } = await prompts({
+      const { proceed } = await ask({
         type: 'confirm',
         name: 'proceed',
         message: 'Working tree is dirty. Continue?',
         initial: false
-      });
+      }, defaultsMode);
       if (!proceed) process.exit(1);
     }
   }
@@ -282,12 +310,12 @@ async function confirmRepo(repoRoot, config) {
   if (config.repo.confirmIfNoRemote) {
     const remotes = git(['remote'], { cwd: repoRoot });
     if (remotes.stdout.trim().length === 0) {
-      const { proceed } = await prompts({
+      const { proceed } = await ask({
         type: 'confirm',
         name: 'proceed',
         message: 'No git remote configured. Continue anyway?',
         initial: false
-      });
+      }, defaultsMode);
       if (!proceed) process.exit(1);
     }
   }
@@ -305,26 +333,26 @@ async function confirmRepo(repoRoot, config) {
   return { repoRoot, branch };
 }
 
-async function maybeCreateBranch(repoRoot, config, dryRun) {
+async function maybeCreateBranch(repoRoot, config, dryRun, defaultsMode) {
   let currentBranch = 'unknown';
   const branchResult = git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot });
   if (branchResult.status === 0) currentBranch = branchResult.stdout.trim();
 
   if (!config.branch.create) return currentBranch;
 
-  const { createBranch } = await prompts({
+  const { createBranch } = await ask({
     type: 'confirm',
     name: 'createBranch',
     message: 'Create a new branch for this run?',
     initial: true
-  });
+  }, defaultsMode);
   if (!createBranch) return currentBranch;
 
-  const { prefix } = await prompts({
+  const { prefix } = await ask({
     type: 'text',
     name: 'prefix',
     message: 'Branch prefix (initials, ticket id, etc.) [optional]:'
-  });
+  }, defaultsMode);
 
   const timestamp = formatTimestamp();
   const branchName = `${prefix ? `${prefix.trim()}/` : ''}${config.branch.pattern.replace('YYYYMMDD-HHMMSS', timestamp)}`;
@@ -342,7 +370,7 @@ async function maybeCreateBranch(repoRoot, config, dryRun) {
   return branchName;
 }
 
-async function buildPrompt(repoRoot, branch, config) {
+async function buildPrompt(repoRoot, branch, config, defaultsMode) {
   const templatePath = path.join(repoRoot, config.prompt.templatePath);
   const template = fs.existsSync(templatePath)
     ? fs.readFileSync(templatePath, 'utf8')
@@ -351,76 +379,76 @@ async function buildPrompt(repoRoot, branch, config) {
   const projectTypes = detectProjectTypes(repoRoot);
   let projectType = projectTypes[0] || 'Unknown';
   if (projectTypes.length > 1) {
-    const { pickedType } = await prompts({
+    const { pickedType } = await ask({
       type: 'select',
       name: 'pickedType',
       message: 'Select project type:',
       choices: projectTypes.map((type) => ({ title: type, value: type }))
-    });
+    }, defaultsMode);
     projectType = pickedType || projectType;
   }
 
   const defaults = suggestedCommands(projectType);
 
-  const { goal } = await prompts({
+  const { goal } = await ask({
     type: 'text',
     name: 'goal',
     message: 'Describe the goal:'
-  });
+  }, defaultsMode);
 
-  const { inScope } = await prompts({
+  const { inScope } = await ask({
     type: 'list',
     name: 'inScope',
     message: 'In-scope items (comma separated):'
-  });
+  }, defaultsMode);
 
-  const { outScope } = await prompts({
+  const { outScope } = await ask({
     type: 'list',
     name: 'outScope',
     message: 'Out-of-scope items (comma separated):'
-  });
+  }, defaultsMode);
 
-  const { constraints } = await prompts({
+  const { constraints } = await ask({
     type: 'list',
     name: 'constraints',
     message: 'Extra constraints (comma separated):'
-  });
+  }, defaultsMode);
 
-  const { acceptanceCriteria } = await prompts({
+  const { acceptanceCriteria } = await ask({
     type: 'list',
     name: 'acceptanceCriteria',
     message: 'Acceptance criteria (comma separated):'
-  });
+  }, defaultsMode);
 
-  const { testCommand } = await prompts({
+  const { testCommand } = await ask({
     type: 'text',
     name: 'testCommand',
     message: 'Test command:',
     initial: config.commands.test || defaults.test
-  });
+  }, defaultsMode);
 
-  const { buildCommand } = await prompts({
+  const { buildCommand } = await ask({
     type: 'text',
     name: 'buildCommand',
     message: 'Build command:',
     initial: config.commands.build || defaults.build
-  });
+  }, defaultsMode);
 
-  const { lintCommand } = await prompts({
+  const { lintCommand } = await ask({
     type: 'text',
     name: 'lintCommand',
     message: 'Lint command:',
     initial: config.commands.lint || defaults.lint
-  });
+  }, defaultsMode);
 
   let maxLoops = config.loop.maxLoops;
   if (config.loop.confirmMaxLoops) {
-    const { loopCount } = await prompts({
+    const { loopCount } = await ask({
       type: 'number',
       name: 'loopCount',
       message: 'Max loop iterations (confirm):',
       initial: maxLoops
-    });
+    }, defaultsMode);
     if (loopCount) maxLoops = loopCount;
   }
 
@@ -494,7 +522,7 @@ function writeState(repoRoot, data) {
 
 async function main() {
   const argv = minimist(process.argv.slice(2), {
-    boolean: ['yolo', 'force-yolo', 'search', 'log-commit', 'dry-run', 'prompt-only', 'run-loop', 'update-prompt'],
+    boolean: ['yolo', 'force-yolo', 'search', 'log-commit', 'dry-run', 'prompt-only', 'run-loop', 'update-prompt', 'defaults', 'help', 'print-config'],
     string: ['model', 'sandbox', 'codex-path', 'max-loops']
   });
 
@@ -503,13 +531,51 @@ async function main() {
   const promptOnly = argv['prompt-only'] === true;
   const runLoop = argv['run-loop'] === true;
   const updatePromptFlag = argv['update-prompt'] === true;
+  const defaultsMode = argv.defaults === true;
+
+  if (argv.help || argv.h) {
+    console.log(`codex-loop usage:
+  codex-loop [options]
+
+Core options:
+  --prompt-only       Build/update the prompt and exit (still writes .codex/state.json)
+  --run-loop          Run using existing prompt (no prompt builder)
+  --update-prompt     Rebuild prompt before running (works with default or --run-loop)
+  --dry-run           Show planned actions without executing Codex or committing
+
+Safety:
+  --yolo              Allow Codex to run without sandbox/approvals (blocked unless --force-yolo)
+  --force-yolo        Required to enable --yolo
+
+Codex flags:
+  --model <name>      Override model (default: ${DEFAULT_CONFIG.codex.model})
+  --sandbox <mode>    Override sandbox (default: ${DEFAULT_CONFIG.codex.sandbox})
+  --search            Enable search
+  --codex-path <path> Override codex binary (default: ${DEFAULT_CONFIG.codex.path})
+
+Loop:
+  --max-loops <n>     Override max loops (default: ${DEFAULT_CONFIG.loop.maxLoops})
+  --log-commit        Commit .codex_logs/ during each iteration
+
+Automation:
+  --defaults          Non-interactive mode; uses defaults and auto-confirms prompts
+  --print-config      Print effective config and exit
+
+Defaults mode behavior:
+  - Auto-confirms repo usage, dirty tree warnings, and no-remote warnings.
+  - Creates a branch using the default pattern and optional prefix (empty by default).
+  - Builds a prompt using empty lists and default commands.
+  - Requires an existing git repo; if none is detected, exits with an error.
+`);
+    process.exit(0);
+  }
 
   if (promptOnly && runLoop) {
     console.error('Cannot use --prompt-only and --run-loop together.');
     process.exit(1);
   }
 
-  const repoRoot = await resolveRepoRoot(process.cwd(), config);
+  const repoRoot = await resolveRepoRoot(process.cwd(), config, defaultsMode);
   const repoConfigPath = path.join(repoRoot, '.codex', 'config.json');
   const fileConfig = readJson(repoConfigPath);
   config = deepMerge(config, fileConfig);
@@ -522,6 +588,11 @@ async function main() {
   if (argv.yolo) config.codex.yolo = true;
   if (argv['force-yolo']) config.codex.forceYolo = true;
   if (argv['log-commit']) config.logging.commitLogs = true;
+
+  if (argv['print-config']) {
+    console.log(JSON.stringify(config, null, 2));
+    process.exit(0);
+  }
 
   if (config.codex.yolo && !config.codex.forceYolo) {
     console.error('Refusing to run with --yolo without --force-yolo.');
@@ -543,8 +614,8 @@ async function main() {
     }
   }
 
-  const repoInfo = await confirmRepo(repoRoot, config);
-  const branch = await maybeCreateBranch(repoInfo.repoRoot, config, dryRun);
+  const repoInfo = await confirmRepo(repoRoot, config, defaultsMode);
+  const branch = await maybeCreateBranch(repoInfo.repoRoot, config, dryRun, defaultsMode);
 
   const promptPath = path.join(repoInfo.repoRoot, config.prompt.path);
   const promptExists = fs.existsSync(promptPath);
@@ -559,7 +630,7 @@ async function main() {
     promptText = fs.readFileSync(promptPath, 'utf8');
   } else {
     if (promptExists && !updatePromptFlag) {
-      const { updatePrompt } = await prompts({
+      const { updatePrompt } = await ask({
         type: 'confirm',
         name: 'updatePrompt',
         message: 'Prompt file exists. Update it now?',
@@ -571,7 +642,7 @@ async function main() {
       }
     }
 
-    promptResult = await buildPrompt(repoInfo.repoRoot, branch, config);
+    promptResult = await buildPrompt(repoInfo.repoRoot, branch, config, defaultsMode);
     config.loop.maxLoops = promptResult.maxLoops;
     config.commands = { ...config.commands, ...promptResult.commands };
     promptText = fs.readFileSync(promptResult.promptPath, 'utf8');

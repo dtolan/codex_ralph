@@ -41,6 +41,7 @@ The CLI will still ask for confirmation before starting a loop, even if defaults
    - Use `--dry-run` to generate the prompt and show the codex command without executing or committing.
    - Use `--prompt-only` to update the prompt and exit.
    - Use `--run-loop` to run with the existing prompt; add `--update-prompt` to rebuild it first.
+   - Use `--defaults` for non-interactive runs (auto-confirms prompts and uses config defaults).
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
 6. Git check-in
    - After each iteration, run `git status --porcelain` to detect changes.
@@ -68,6 +69,12 @@ codex-loop --run-loop
 
 # rebuild the prompt before running (use with --run-loop or default)
 codex-loop --update-prompt
+
+# non-interactive defaults (auto-confirms, uses config + defaults)
+codex-loop --defaults
+
+# print effective config and exit
+codex-loop --print-config
 
 # with explicit loop limit and codex flags
 codex-loop --max-loops 50 --model gpt-5 --sandbox --search
