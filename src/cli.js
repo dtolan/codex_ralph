@@ -190,9 +190,32 @@ function defaultAnswer(question) {
   return question.initial !== undefined ? question.initial : '';
 }
 
-async function ask(question, defaultsMode) {
-  if (!defaultsMode) return prompts(question);
-  return { [question.name]: defaultAnswer(question) };
+function isHelpValue(value) {
+  if (typeof value === 'string') return value.trim() === '?';
+  if (Array.isArray(value)) {
+    return value.length === 1 && String(value[0]).trim() === '?';
+  }
+  return false;
+}
+
+function printHelp(helpText) {
+  if (!helpText) return;
+  console.log('\n--- Help ---');
+  console.log(helpText.trim());
+  console.log('------------\n');
+}
+
+async function ask(question, defaultsMode, helpText) {
+  if (defaultsMode) return { [question.name]: defaultAnswer(question) };
+  while (true) {
+    const response = await prompts(question);
+    const value = response[question.name];
+    if (isHelpValue(value)) {
+      printHelp(helpText);
+      continue;
+    }
+    return response;
+  }
 }
 
 async function resolveRepoRoot(cwd, config, defaultsMode) {
@@ -206,16 +229,16 @@ async function resolveRepoRoot(cwd, config, defaultsMode) {
     process.exit(1);
   }
 
-  const { repoChoice } = await ask({
-    type: 'select',
-    name: 'repoChoice',
-    message: 'No git repo detected. Choose how to proceed:',
-    choices: [
-      { title: 'Use local path', value: 'path' },
-      { title: 'Clone from URL', value: 'url' },
-      { title: 'Cancel', value: 'cancel' }
-    ]
-  });
+    const { repoChoice } = await ask({
+      type: 'select',
+      name: 'repoChoice',
+      message: 'No git repo detected. Choose how to proceed:',
+      choices: [
+        { title: 'Use local path', value: 'path' },
+        { title: 'Clone from URL', value: 'url' },
+        { title: 'Cancel', value: 'cancel' }
+      ]
+    }, defaultsMode);
 
   if (repoChoice === 'cancel' || !repoChoice) {
     process.exit(1);
@@ -390,56 +413,58 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
 
   const defaults = suggestedCommands(projectType);
 
+  const helpLink = 'https://github.com/dtolan/codex_ralph#prompt-file-format-planned';
+
   const { goal } = await ask({
     type: 'text',
     name: 'goal',
     message: 'Describe the goal:'
-  }, defaultsMode);
+  }, defaultsMode, `Goal: A short statement of the desired outcome.\nExample: \"Add a --dry-run flag and document it.\"`);
 
   const { inScope } = await ask({
     type: 'list',
     name: 'inScope',
     message: 'In-scope items (comma separated):'
-  }, defaultsMode);
+  }, defaultsMode, `In-scope items: Explicit tasks or files to include.\nExample: \"Update README, add CLI flag\".\nTip: Use concise phrases.\nMore: ${helpLink}`);
 
   const { outScope } = await ask({
     type: 'list',
     name: 'outScope',
     message: 'Out-of-scope items (comma separated):'
-  }, defaultsMode);
+  }, defaultsMode, `Out-of-scope items: What should not be touched.\nExample: \"Do not modify CI workflows\".\nMore: ${helpLink}`);
 
   const { constraints } = await ask({
     type: 'list',
     name: 'constraints',
     message: 'Extra constraints (comma separated):'
-  }, defaultsMode);
+  }, defaultsMode, `Constraints: Rules the work must follow.\nExample: \"No new dependencies\", \"Keep API stable\".\nMore: ${helpLink}`);
 
   const { acceptanceCriteria } = await ask({
     type: 'list',
     name: 'acceptanceCriteria',
     message: 'Acceptance criteria (comma separated):'
-  }, defaultsMode);
+  }, defaultsMode, `Acceptance criteria: Definition of done.\nExample: \"Tests pass\", \"Docs updated\".\nMore: ${helpLink}`);
 
   const { testCommand } = await ask({
     type: 'text',
     name: 'testCommand',
     message: 'Test command:',
     initial: config.commands.test || defaults.test
-  }, defaultsMode);
+  }, defaultsMode, `Test command: How to verify correctness.\nExample: \"npm test\".\nMore: ${helpLink}`);
 
   const { buildCommand } = await ask({
     type: 'text',
     name: 'buildCommand',
     message: 'Build command:',
     initial: config.commands.build || defaults.build
-  }, defaultsMode);
+  }, defaultsMode, `Build command: How to build/compile.\nExample: \"npm run build\".\nMore: ${helpLink}`);
 
   const { lintCommand } = await ask({
     type: 'text',
     name: 'lintCommand',
     message: 'Lint command:',
     initial: config.commands.lint || defaults.lint
-  }, defaultsMode);
+  }, defaultsMode, `Lint command: How to run linting.\nExample: \"npm run lint\".\nMore: ${helpLink}`);
 
   let maxLoops = config.loop.maxLoops;
   if (config.loop.confirmMaxLoops) {
@@ -448,7 +473,7 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
       name: 'loopCount',
       message: 'Max loop iterations (confirm):',
       initial: maxLoops
-    }, defaultsMode);
+    }, defaultsMode, `Max loops: Safety cap for iterations.\nExample: 20`);
     if (loopCount) maxLoops = loopCount;
   }
 
@@ -566,6 +591,7 @@ Defaults mode behavior:
   - Creates a branch using the default pattern and optional prefix (empty by default).
   - Builds a prompt using empty lists and default commands.
   - Requires an existing git repo; if none is detected, exits with an error.
+  - Enter "?" at prompt-builder questions for help.
 `);
     process.exit(0);
   }
@@ -668,7 +694,7 @@ Defaults mode behavior:
     const codexArgs = prepareCodexArgs(config, repoInfo.repoRoot);
     console.log('[dry-run] codex command:', formatCommand(config.codex.path, codexArgs));
     console.log('[dry-run] loop iterations:', config.loop.maxLoops);
-    console.log('[dry-run] prompt path:', promptResult.promptPath);
+    console.log('[dry-run] prompt path:', promptResult ? promptResult.promptPath : promptPath);
     console.log('[dry-run] logs dir:', logsRoot);
     console.log('[dry-run] skipping codex execution and git commits.');
     if (promptOnly) {

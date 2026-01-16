@@ -52,6 +52,8 @@ node src/cli.js --run-loop
 - Git: per-iteration commits with message `codex-loop: iter {n} - {summary}`
 - Logging: `.codex_logs/` local-only (unless `--log-commit`)
 
+Tip: For prompt-builder questions, enter `?` to display a short help summary and a link to the full description.
+
 ## How It Works (Planned)
 
 1. Repo detection

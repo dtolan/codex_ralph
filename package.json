@@ -18,7 +18,7 @@
   "scripts": {
     "start": "node src/cli.js",
     "lint": "node -c src/cli.js",
-    "test": "node src/cli.js --defaults --dry-run"
+    "test": "node src/cli.js --defaults --dry-run --run-loop"
   },
   "dependencies": {
     "minimist": "^1.2.8",
