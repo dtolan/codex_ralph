@@ -72,6 +72,11 @@ function runShell(command, options = {}) {
   return spawnSync(command, { encoding: 'utf8', shell: true, ...options });
 }
 
+function runCodex(cmd, args, options = {}) {
+  const useShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
+  return spawnSync(cmd, args, { encoding: 'utf8', shell: useShell, ...options });
+}
+
 function git(args, options = {}) {
   return run('git', args, options);
 }
@@ -672,10 +677,22 @@ function formatCommand(cmd, args) {
 
 function resolveCodexPath(config) {
   const configured = config.codex.path || 'codex';
-  if (process.platform === 'win32' && configured === 'codex') {
-    return 'codex.cmd';
+  if (process.platform === 'win32' && (configured === 'codex' || configured === 'codex.cmd')) {
+    const resolved = resolveCodexFromPath();
+    return resolved || 'codex.cmd';
   }
   return configured;
+}
+
+function resolveCodexFromPath() {
+  const result = run('where', ['codex'], { encoding: 'utf8' });
+  if (result.status !== 0) return null;
+  const lines = (result.stdout || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return null;
+  const exe = lines.find((line) => line.toLowerCase().endsWith('.exe'));
+  if (exe) return exe;
+  const bare = lines.find((line) => !/\.(cmd|bat|ps1)$/i.test(line));
+  return bare || lines[0];
 }
 
 function ensureLogDirs(repoRoot, config, runId) {
@@ -775,7 +792,7 @@ async function runScopeAssist({ repoRoot, config, projectType, goal, existing })
   if (config.codex.sandbox) args.push('--sandbox', config.codex.sandbox);
   if (config.codex.search) args.push('--search');
 
-  const result = run(resolveCodexPath(config), args, {
+  const result = runCodex(resolveCodexPath(config), args, {
     cwd: tmpBase,
     input: prompt,
     maxBuffer: 20 * 1024 * 1024
@@ -994,7 +1011,7 @@ Defaults mode behavior:
 
   for (let i = 1; i <= config.loop.maxLoops; i += 1) {
     const codexArgs = prepareCodexArgs(config, repoInfo.repoRoot);
-    const result = run(resolveCodexPath(config), codexArgs, {
+    const result = runCodex(resolveCodexPath(config), codexArgs, {
       cwd: repoInfo.repoRoot,
       input: promptText,
       maxBuffer: 20 * 1024 * 1024
