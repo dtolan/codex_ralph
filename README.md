@@ -15,18 +15,23 @@ codex-loop is a CLI wrapper that builds a structured Codex prompt, creates a saf
 - Codex CLI installed and on PATH: `npm i -g @openai/codex`
 
 Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the repo root via `--cd <repo-root>`. `--yolo` is blocked unless the user explicitly passes `--force-yolo`, and the CLI will display a loud warning about the risks.
+The CLI will still ask for confirmation before starting a loop, even if defaults are provided by flags.
 
 ## How It Works (Planned)
 
 1. Repo detection
    - If `.git` exists, show current repo + branch and ask for confirmation.
    - If no repo, prompt for local path or a remote URL to clone.
+   - If there is no remote configured, ask for explicit confirmation before proceeding.
+   - If the working tree is dirty, warn and ask whether to proceed.
 2. Branch creation
    - Default: create a new branch from the current branch.
    - Branch name: `(<prefix>/)?codex-YYYYMMDD-HHMMSS`.
+   - Warn if the current branch is not the default branch.
 3. Prompt builder
    - Detects project type (Node, Python, Go, Rust, etc.).
    - Prompts for goal, constraints, acceptance criteria, and test commands.
+   - Asks for a max-iteration limit, even if `--max-loops` is provided (for confirmation).
 4. Prompt file
    - Writes `.codex/CODEX_PROMPT.md` with a structured template.
 5. Codex loop
@@ -41,6 +46,7 @@ Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the re
 7. Logging
    - Logs per-iteration output and diffs to `.codex_logs/<run-id>/`.
    - Logs are local-only by default; `codex-loop` will ensure `.gitignore` includes `.codex_logs/`.
+   - Use `--log-commit` to include `.codex_logs/` in commits for audit trails.
 
 ## Planned CLI Usage
 
@@ -56,6 +62,9 @@ codex-loop --max-loops 50 --model gpt-5 --yolo --force-yolo
 
 # override codex binary
 codex-loop --codex-path "C:\\tools\\codex.exe"
+
+# include logs in commits (audit trail)
+codex-loop --log-commit
 ```
 
 ## Prompt File Format (Planned)
@@ -83,6 +92,9 @@ EXIT_MESSAGE: "All parameters and tests have completed successfully"
   - Iteration logs, prompt snapshot, git diffs
 
 Note: `.codex/state.json` and `.codex_logs/` are local-only and should not be committed by default.
+`--log-commit` temporarily allows `.codex_logs/` to be committed for the current run.
+`codex-loop` will ensure `.gitignore` includes `.codex/state.json` and `.codex_logs/` when the tool runs.
+Settings precedence: CLI flags override `.codex/config.json`, and interactive confirmations still occur before a run starts.
 
 ## Stop Conditions (Planned)
 
