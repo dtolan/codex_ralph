@@ -1,40 +1,37 @@
 ﻿# CODEX Prompt
 
 ## Context
-- Repo: <repo>
-- Branch: <branch>
-- Date: <date>
-- Project type: <projectType>
+- Repo: codex_ralph
+- Branch: codex-20260116-154816
+- Date: 2026-01-16
+- Project type: Node.js
 
 ## Goal
-Describe the desired outcome in one or two sentences.
+Describe the desired outcome.
 
 ## In Scope
-- <item 1>
-- <item 2>
+- (none)
 
 ## Out of Scope
-- <item 1>
-- <item 2>
+- (none)
 
 ## Constraints
 - Do not modify files outside the repo.
 - Do not change CI/CD or infra unless explicitly requested.
 - Avoid adding new dependencies unless necessary and justified.
 - Keep changes minimal and focused.
-- <project-specific constraint>
+
 
 ## Acceptance Criteria
-- <user-defined criterion>
-- <user-defined criterion>
-- Tests pass: <test command>
-- Build succeeds: <build command>
-- Lint clean: <lint command>
+- (none)
+- Tests pass: npm test
+- Build succeeds: npm run build
+- Lint clean: npm run lint
 
 ## Required Commands
-- Test: <test command>
-- Build: <build command>
-- Lint: <lint command>
+- Test: npm test
+- Build: npm run build
+- Lint: npm run lint
 
 ## Execution Rules
 - Use the existing project conventions.
@@ -42,7 +39,7 @@ Describe the desired outcome in one or two sentences.
 - If you get stuck, document blockers and suggest next steps.
 
 ## Escape Hatch
-If not complete by iteration <maxLoops>:
+If not complete by iteration 20:
 - Summarize what’s done
 - List blockers
 - Propose the next action

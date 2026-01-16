@@ -34,6 +34,16 @@ node src/cli.js --prompt-only
 node src/cli.js --run-loop
 ```
 
+## Defaults Mode
+
+`--defaults` runs non-interactive with auto-confirmations and the current config defaults. It will exit if no git repo is detected. Defaults used unless overridden by config or CLI flags:
+
+- `--max-loops`: 20
+- Codex: `--model gpt-5`, `--sandbox workspace-write`, `--full-auto`, `--cd <repo-root>`
+- Safety: `--yolo` disabled (blocked unless `--force-yolo`)
+- Git: per-iteration commits with message `codex-loop: iter {n} - {summary}`
+- Logging: `.codex_logs/` local-only (unless `--log-commit`)
+
 ## How It Works (Planned)
 
 1. Repo detection
