@@ -40,6 +40,7 @@ Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the re
    - Commit message format: `codex-loop: iter <n> - <short summary>`.
 7. Logging
    - Logs per-iteration output and diffs to `.codex_logs/<run-id>/`.
+   - Logs are local-only by default; `codex-loop` will ensure `.gitignore` includes `.codex_logs/`.
 
 ## Planned CLI Usage
 
@@ -81,7 +82,7 @@ EXIT_MESSAGE: "All parameters and tests have completed successfully"
 - `.codex_logs/<run-id>/`
   - Iteration logs, prompt snapshot, git diffs
 
-Note: `.codex/state.json` is local-only and should not be committed, while `.codex_logs/` should be committed for traceability.
+Note: `.codex/state.json` and `.codex_logs/` are local-only and should not be committed by default.
 
 ## Stop Conditions (Planned)
 
