@@ -185,6 +185,10 @@ function defaultAnswer(question) {
     return question.initial !== undefined ? question.initial : 0;
   }
   if (question.type === 'list') {
+    if (Array.isArray(question.initial)) return question.initial;
+    if (typeof question.initial === 'string' && question.initial.trim().length > 0) {
+      return question.initial.split(',').map((item) => item.trim()).filter(Boolean);
+    }
     return [];
   }
   return question.initial !== undefined ? question.initial : '';
@@ -216,6 +220,61 @@ async function ask(question, defaultsMode, helpText) {
     }
     return response;
   }
+}
+
+function extractSection(text, heading) {
+  const pattern = new RegExp(`##\\s+${heading}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|\\n#\\s|$)`, 'i');
+  const match = text.match(pattern);
+  return match ? match[1].trim() : '';
+}
+
+function parseBullets(sectionText) {
+  if (!sectionText) return [];
+  return sectionText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.slice(2).trim())
+    .filter((item) => item && item !== '(none)' && !item.startsWith('<'));
+}
+
+function parseExistingPrompt(promptText) {
+  if (!promptText) return {};
+  const context = extractSection(promptText, 'Context');
+  const goalSection = extractSection(promptText, 'Goal');
+  const inScopeSection = extractSection(promptText, 'In Scope');
+  const outScopeSection = extractSection(promptText, 'Out of Scope');
+  const constraintsSection = extractSection(promptText, 'Constraints');
+  const acceptanceSection = extractSection(promptText, 'Acceptance Criteria');
+  const commandsSection = extractSection(promptText, 'Required Commands');
+  const escapeHatchSection = extractSection(promptText, 'Escape Hatch');
+
+  const projectTypeMatch = context.match(/Project type:\s*(.+)/i);
+  const projectType = projectTypeMatch ? projectTypeMatch[1].trim() : '';
+
+  const testMatch = commandsSection.match(/-\\s*Test:\\s*(.+)/i);
+  const buildMatch = commandsSection.match(/-\\s*Build:\\s*(.+)/i);
+  const lintMatch = commandsSection.match(/-\\s*Lint:\\s*(.+)/i);
+
+  const maxLoopsMatch = escapeHatchSection.match(/iteration\\s+(\\d+)/i);
+  const maxLoops = maxLoopsMatch ? Number(maxLoopsMatch[1]) : undefined;
+
+  const goalLine = goalSection.split(/\r?\n/).find((line) => line.trim().length > 0) || '';
+
+  return {
+    projectType,
+    goal: goalLine.replace(/^[-*]\\s*/, '').trim(),
+    inScope: parseBullets(inScopeSection),
+    outScope: parseBullets(outScopeSection),
+    constraints: parseBullets(constraintsSection),
+    acceptanceCriteria: parseBullets(acceptanceSection),
+    commands: {
+      test: testMatch ? testMatch[1].trim() : '',
+      build: buildMatch ? buildMatch[1].trim() : '',
+      lint: lintMatch ? lintMatch[1].trim() : ''
+    },
+    maxLoops
+  };
 }
 
 async function resolveRepoRoot(cwd, config, defaultsMode) {
@@ -399,74 +458,94 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
     ? fs.readFileSync(templatePath, 'utf8')
     : fs.readFileSync(path.join(__dirname, '..', '.codex', 'CODEX_PROMPT.template.md'), 'utf8');
 
+  let existingPrompt = {};
+  const existingPromptPath = path.join(repoRoot, config.prompt.path);
+  if (fs.existsSync(existingPromptPath)) {
+    existingPrompt = parseExistingPrompt(fs.readFileSync(existingPromptPath, 'utf8'));
+  }
+
   const projectTypes = detectProjectTypes(repoRoot);
   let projectType = projectTypes[0] || 'Unknown';
   if (projectTypes.length > 1) {
+    const initialIndex = existingPrompt.projectType
+      ? Math.max(0, projectTypes.indexOf(existingPrompt.projectType))
+      : 0;
     const { pickedType } = await ask({
       type: 'select',
       name: 'pickedType',
       message: 'Select project type:',
-      choices: projectTypes.map((type) => ({ title: type, value: type }))
+      choices: projectTypes.map((type) => ({ title: type, value: type })),
+      initial: initialIndex
     }, defaultsMode);
     projectType = pickedType || projectType;
+  } else if (existingPrompt.projectType) {
+    projectType = existingPrompt.projectType;
   }
 
   const defaults = suggestedCommands(projectType);
+  const existingCommands = existingPrompt.commands || {};
 
   const helpLink = 'https://github.com/dtolan/codex_ralph#prompt-file-format-planned';
 
   const { goal } = await ask({
     type: 'text',
     name: 'goal',
-    message: 'Describe the goal:'
+    message: 'Describe the goal:',
+    initial: existingPrompt.goal || ''
   }, defaultsMode, `Goal: A short statement of the desired outcome.\nExample: \"Add a --dry-run flag and document it.\"`);
 
   const { inScope } = await ask({
     type: 'list',
     name: 'inScope',
-    message: 'In-scope items (comma separated):'
+    message: 'In-scope items (comma separated):',
+    initial: existingPrompt.inScope && existingPrompt.inScope.length ? existingPrompt.inScope.join(', ') : ''
   }, defaultsMode, `In-scope items: Explicit tasks or files to include.\nExample: \"Update README, add CLI flag\".\nTip: Use concise phrases.\nMore: ${helpLink}`);
 
   const { outScope } = await ask({
     type: 'list',
     name: 'outScope',
-    message: 'Out-of-scope items (comma separated):'
+    message: 'Out-of-scope items (comma separated):',
+    initial: existingPrompt.outScope && existingPrompt.outScope.length ? existingPrompt.outScope.join(', ') : ''
   }, defaultsMode, `Out-of-scope items: What should not be touched.\nExample: \"Do not modify CI workflows\".\nMore: ${helpLink}`);
 
   const { constraints } = await ask({
     type: 'list',
     name: 'constraints',
-    message: 'Extra constraints (comma separated):'
+    message: 'Extra constraints (comma separated):',
+    initial: existingPrompt.constraints && existingPrompt.constraints.length ? existingPrompt.constraints.join(', ') : ''
   }, defaultsMode, `Constraints: Rules the work must follow.\nExample: \"No new dependencies\", \"Keep API stable\".\nMore: ${helpLink}`);
 
   const { acceptanceCriteria } = await ask({
     type: 'list',
     name: 'acceptanceCriteria',
-    message: 'Acceptance criteria (comma separated):'
+    message: 'Acceptance criteria (comma separated):',
+    initial: existingPrompt.acceptanceCriteria && existingPrompt.acceptanceCriteria.length
+      ? existingPrompt.acceptanceCriteria.join(', ')
+      : ''
   }, defaultsMode, `Acceptance criteria: Definition of done.\nExample: \"Tests pass\", \"Docs updated\".\nMore: ${helpLink}`);
 
   const { testCommand } = await ask({
     type: 'text',
     name: 'testCommand',
     message: 'Test command:',
-    initial: config.commands.test || defaults.test
+    initial: existingCommands.test || config.commands.test || defaults.test
   }, defaultsMode, `Test command: How to verify correctness.\nExample: \"npm test\".\nMore: ${helpLink}`);
 
   const { buildCommand } = await ask({
     type: 'text',
     name: 'buildCommand',
     message: 'Build command:',
-    initial: config.commands.build || defaults.build
+    initial: existingCommands.build || config.commands.build || defaults.build
   }, defaultsMode, `Build command: How to build/compile.\nExample: \"npm run build\".\nMore: ${helpLink}`);
 
   const { lintCommand } = await ask({
     type: 'text',
     name: 'lintCommand',
     message: 'Lint command:',
-    initial: config.commands.lint || defaults.lint
+    initial: existingCommands.lint || config.commands.lint || defaults.lint
   }, defaultsMode, `Lint command: How to run linting.\nExample: \"npm run lint\".\nMore: ${helpLink}`);
 
-  let maxLoops = config.loop.maxLoops;
+  let maxLoops = existingPrompt.maxLoops || config.loop.maxLoops;
   if (config.loop.confirmMaxLoops) {
     const { loopCount } = await ask({
       type: 'number',
@@ -477,19 +556,30 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
     if (loopCount) maxLoops = loopCount;
   }
 
+  const finalGoal = goal && goal.trim().length ? goal : (existingPrompt.goal || 'Describe the desired outcome.');
+  const finalInScope = inScope && inScope.length ? inScope : (existingPrompt.inScope || []);
+  const finalOutScope = outScope && outScope.length ? outScope : (existingPrompt.outScope || []);
+  const finalConstraints = constraints && constraints.length ? constraints : (existingPrompt.constraints || []);
+  const finalAcceptance = acceptanceCriteria && acceptanceCriteria.length
+    ? acceptanceCriteria
+    : (existingPrompt.acceptanceCriteria || []);
+  const finalTest = testCommand || existingCommands.test || '(none)';
+  const finalBuild = buildCommand || existingCommands.build || '(none)';
+  const finalLint = lintCommand || existingCommands.lint || '(none)';
+
   const data = {
     repo: path.basename(repoRoot),
     branch,
     date: new Date().toISOString().split('T')[0],
     projectType,
-    goal: goal || 'Describe the desired outcome.',
-    inScope: listToBullets(inScope),
-    outScope: listToBullets(outScope),
-    constraints: constraints && constraints.length ? `\n${listToBullets(constraints)}` : '',
-    acceptanceCriteria: listToBullets(acceptanceCriteria),
-    testCommand: testCommand || '(none)',
-    buildCommand: buildCommand || '(none)',
-    lintCommand: lintCommand || '(none)',
+    goal: finalGoal,
+    inScope: listToBullets(finalInScope),
+    outScope: listToBullets(finalOutScope),
+    constraints: finalConstraints && finalConstraints.length ? `\n${listToBullets(finalConstraints)}` : '',
+    acceptanceCriteria: listToBullets(finalAcceptance),
+    testCommand: finalTest || '(none)',
+    buildCommand: finalBuild || '(none)',
+    lintCommand: finalLint || '(none)',
     maxLoops
   };
 
@@ -498,7 +588,7 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
   fs.mkdirSync(path.dirname(promptPath), { recursive: true });
   fs.writeFileSync(promptPath, rendered);
 
-  return { promptPath, maxLoops, commands: { test: testCommand, build: buildCommand, lint: lintCommand } };
+  return { promptPath, maxLoops, commands: { test: finalTest, build: finalBuild, lint: finalLint } };
 }
 
 function parsePromise(output, key = 'PROMISE') {
