@@ -34,7 +34,10 @@ Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the re
    - Defaults to `--full-auto` and `--cd <repo-root>` to keep changes inside the repo.
    - `--yolo` is blocked unless `--force-yolo` is provided, with a loud warning.
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
-6. Logging
+6. Git check-in
+   - After each iteration, stage and commit changes to preserve an audit trail.
+   - Commit messages should include the iteration number and a short summary.
+7. Logging
    - Logs per-iteration output and diffs to `.codex_logs/<run-id>/`.
 
 ## Planned CLI Usage
