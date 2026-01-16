@@ -488,14 +488,26 @@ function logIteration(baseDir, iteration, data) {
   if (data.meta) writeJson(path.join(iterDir, 'meta.json'), data.meta);
 }
 
+function writeState(repoRoot, data) {
+  writeJson(path.join(repoRoot, '.codex', 'state.json'), data);
+}
+
 async function main() {
   const argv = minimist(process.argv.slice(2), {
-    boolean: ['yolo', 'force-yolo', 'search', 'log-commit', 'dry-run'],
+    boolean: ['yolo', 'force-yolo', 'search', 'log-commit', 'dry-run', 'prompt-only', 'run-loop', 'update-prompt'],
     string: ['model', 'sandbox', 'codex-path', 'max-loops']
   });
 
   let config = deepMerge({}, DEFAULT_CONFIG);
   const dryRun = argv['dry-run'] === true;
+  const promptOnly = argv['prompt-only'] === true;
+  const runLoop = argv['run-loop'] === true;
+  const updatePromptFlag = argv['update-prompt'] === true;
+
+  if (promptOnly && runLoop) {
+    console.error('Cannot use --prompt-only and --run-loop together.');
+    process.exit(1);
+  }
 
   const repoRoot = await resolveRepoRoot(process.cwd(), config);
   const repoConfigPath = path.join(repoRoot, '.codex', 'config.json');
@@ -534,25 +546,36 @@ async function main() {
   const repoInfo = await confirmRepo(repoRoot, config);
   const branch = await maybeCreateBranch(repoInfo.repoRoot, config, dryRun);
 
-  const promptExists = fs.existsSync(path.join(repoInfo.repoRoot, config.prompt.path));
-  if (promptExists) {
-    const { updatePrompt } = await prompts({
-      type: 'confirm',
-      name: 'updatePrompt',
-      message: 'Prompt file exists. Update it now?',
-      initial: true
-    });
-    if (!updatePrompt) {
-      console.error('Prompt update required to continue.');
+  const promptPath = path.join(repoInfo.repoRoot, config.prompt.path);
+  const promptExists = fs.existsSync(promptPath);
+  let promptResult = null;
+  let promptText = '';
+
+  if (runLoop && !updatePromptFlag) {
+    if (!promptExists) {
+      console.error('Prompt file not found. Run without --run-loop or pass --update-prompt.');
       process.exit(1);
     }
+    promptText = fs.readFileSync(promptPath, 'utf8');
+  } else {
+    if (promptExists && !updatePromptFlag) {
+      const { updatePrompt } = await prompts({
+        type: 'confirm',
+        name: 'updatePrompt',
+        message: 'Prompt file exists. Update it now?',
+        initial: true
+      });
+      if (!updatePrompt) {
+        console.error('Prompt update required to continue.');
+        process.exit(1);
+      }
+    }
+
+    promptResult = await buildPrompt(repoInfo.repoRoot, branch, config);
+    config.loop.maxLoops = promptResult.maxLoops;
+    config.commands = { ...config.commands, ...promptResult.commands };
+    promptText = fs.readFileSync(promptResult.promptPath, 'utf8');
   }
-
-  const promptResult = await buildPrompt(repoInfo.repoRoot, branch, config);
-  config.loop.maxLoops = promptResult.maxLoops;
-  config.commands = { ...config.commands, ...promptResult.commands };
-
-  const promptText = fs.readFileSync(promptResult.promptPath, 'utf8');
   const runId = formatTimestamp();
   const logsRoot = path.join(repoInfo.repoRoot, config.logging.dir, runId);
 
@@ -563,11 +586,34 @@ async function main() {
     console.log('[dry-run] prompt path:', promptResult.promptPath);
     console.log('[dry-run] logs dir:', logsRoot);
     console.log('[dry-run] skipping codex execution and git commits.');
+    if (promptOnly) {
+      writeState(repoInfo.repoRoot, {
+        repoRoot: repoInfo.repoRoot,
+        branch,
+        runId,
+        iteration: 0,
+        promiseFound: false,
+        timestamp: new Date().toISOString()
+      });
+    }
     return;
   }
 
   ensureLogDirs(repoInfo.repoRoot, config, runId);
   logIteration(logsRoot, 0, { prompt: promptText, meta: { runId, branch } });
+
+  if (promptOnly) {
+    writeState(repoInfo.repoRoot, {
+      repoRoot: repoInfo.repoRoot,
+      branch,
+      runId,
+      iteration: 0,
+      promiseFound: false,
+      timestamp: new Date().toISOString()
+    });
+    console.log('Prompt updated. Exiting due to --prompt-only.');
+    return;
+  }
 
   for (let i = 1; i <= config.loop.maxLoops; i += 1) {
     const codexArgs = prepareCodexArgs(config, repoInfo.repoRoot);
@@ -629,7 +675,7 @@ async function main() {
       }
     }
 
-    writeJson(path.join(repoInfo.repoRoot, '.codex', 'state.json'), {
+    writeState(repoInfo.repoRoot, {
       repoRoot: repoInfo.repoRoot,
       branch,
       runId,
