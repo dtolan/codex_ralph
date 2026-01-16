@@ -14,7 +14,7 @@ codex-loop is a CLI wrapper that builds a structured Codex prompt, creates a saf
 - Git installed and on PATH
 - Codex CLI installed and on PATH: `npm i -g @openai/codex`
 
-Note: `--yolo` is supported for fully automatic runs. Use only in isolated environments.
+Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the repo root via `--cd <repo-root>`. `--yolo` is blocked unless the user explicitly passes `--force-yolo`, and the CLI will display a loud warning about the risks.
 
 ## How It Works (Planned)
 
@@ -31,6 +31,8 @@ Note: `--yolo` is supported for fully automatic runs. Use only in isolated envir
    - Writes `.codex/CODEX_PROMPT.md` with a structured template.
 5. Codex loop
    - Runs `codex exec` in a fresh iteration each time.
+   - Defaults to `--full-auto` and `--cd <repo-root>` to keep changes inside the repo.
+   - `--yolo` is blocked unless `--force-yolo` is provided, with a loud warning.
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
 6. Logging
    - Logs per-iteration output and diffs to `.codex_logs/<run-id>/`.
@@ -42,7 +44,10 @@ Note: `--yolo` is supported for fully automatic runs. Use only in isolated envir
 codex-loop
 
 # with explicit loop limit and codex flags
-codex-loop --max-loops 50 --model gpt-5 --sandbox --search --yolo
+codex-loop --max-loops 50 --model gpt-5 --sandbox --search
+
+# allow yolo (dangerous; disabled by default)
+codex-loop --max-loops 50 --model gpt-5 --yolo --force-yolo
 
 # override codex binary
 codex-loop --codex-path "C:\\tools\\codex.exe"
