@@ -494,18 +494,42 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
     initial: existingPrompt.goal || ''
   }, defaultsMode, `Goal: A short statement of the desired outcome.\nExample: \"Add a --dry-run flag and document it.\"`);
 
+  const goalText = (goal && goal.trim().length ? goal : (existingPrompt.goal || '')).trim();
+
+  const { useScopeAssist } = await ask({
+    type: 'confirm',
+    name: 'useScopeAssist',
+    message: 'Use Codex to draft scope (in/out) and acceptance criteria?',
+    initial: true
+  }, defaultsMode);
+
+  let scopeDraft = null;
+  if (useScopeAssist) {
+    scopeDraft = await runScopeAssist({
+      repoRoot,
+      config,
+      projectType,
+      goal: goalText || 'Define scope for this change.',
+      existing: existingPrompt
+    });
+  }
+
   const { inScope } = await ask({
     type: 'list',
     name: 'inScope',
     message: 'In-scope items (comma separated):',
-    initial: existingPrompt.inScope && existingPrompt.inScope.length ? existingPrompt.inScope.join(', ') : ''
+    initial: existingPrompt.inScope && existingPrompt.inScope.length
+      ? existingPrompt.inScope.join(', ')
+      : (scopeDraft && scopeDraft.inScope ? scopeDraft.inScope.join(', ') : '')
   }, defaultsMode, `In-scope items: Explicit tasks or files to include.\nExample: \"Update README, add CLI flag\".\nTip: Use concise phrases.\nMore: ${helpLink}`);
 
   const { outScope } = await ask({
     type: 'list',
     name: 'outScope',
     message: 'Out-of-scope items (comma separated):',
-    initial: existingPrompt.outScope && existingPrompt.outScope.length ? existingPrompt.outScope.join(', ') : ''
+    initial: existingPrompt.outScope && existingPrompt.outScope.length
+      ? existingPrompt.outScope.join(', ')
+      : (scopeDraft && scopeDraft.outScope ? scopeDraft.outScope.join(', ') : '')
   }, defaultsMode, `Out-of-scope items: What should not be touched.\nExample: \"Do not modify CI workflows\".\nMore: ${helpLink}`);
 
   const { constraints } = await ask({
@@ -521,28 +545,28 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
     message: 'Acceptance criteria (comma separated):',
     initial: existingPrompt.acceptanceCriteria && existingPrompt.acceptanceCriteria.length
       ? existingPrompt.acceptanceCriteria.join(', ')
-      : ''
+      : (scopeDraft && scopeDraft.acceptanceCriteria ? scopeDraft.acceptanceCriteria.join(', ') : '')
   }, defaultsMode, `Acceptance criteria: Definition of done.\nExample: \"Tests pass\", \"Docs updated\".\nMore: ${helpLink}`);
 
   const { testCommand } = await ask({
     type: 'text',
     name: 'testCommand',
     message: 'Test command:',
-    initial: existingCommands.test || config.commands.test || defaults.test
+    initial: existingCommands.test || config.commands.test || (scopeDraft && scopeDraft.commands ? scopeDraft.commands.test : '') || defaults.test
   }, defaultsMode, `Test command: How to verify correctness.\nExample: \"npm test\".\nMore: ${helpLink}`);
 
   const { buildCommand } = await ask({
     type: 'text',
     name: 'buildCommand',
     message: 'Build command:',
-    initial: existingCommands.build || config.commands.build || defaults.build
+    initial: existingCommands.build || config.commands.build || (scopeDraft && scopeDraft.commands ? scopeDraft.commands.build : '') || defaults.build
   }, defaultsMode, `Build command: How to build/compile.\nExample: \"npm run build\".\nMore: ${helpLink}`);
 
   const { lintCommand } = await ask({
     type: 'text',
     name: 'lintCommand',
     message: 'Lint command:',
-    initial: existingCommands.lint || config.commands.lint || defaults.lint
+    initial: existingCommands.lint || config.commands.lint || (scopeDraft && scopeDraft.commands ? scopeDraft.commands.lint : '') || defaults.lint
   }, defaultsMode, `Lint command: How to run linting.\nExample: \"npm run lint\".\nMore: ${helpLink}`);
 
   let maxLoops = existingPrompt.maxLoops || config.loop.maxLoops;
@@ -557,12 +581,16 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
   }
 
   const finalGoal = goal && goal.trim().length ? goal : (existingPrompt.goal || 'Describe the desired outcome.');
-  const finalInScope = inScope && inScope.length ? inScope : (existingPrompt.inScope || []);
-  const finalOutScope = outScope && outScope.length ? outScope : (existingPrompt.outScope || []);
+  const finalInScope = inScope && inScope.length
+    ? inScope
+    : (existingPrompt.inScope || (scopeDraft ? scopeDraft.inScope : []) || []);
+  const finalOutScope = outScope && outScope.length
+    ? outScope
+    : (existingPrompt.outScope || (scopeDraft ? scopeDraft.outScope : []) || []);
   const finalConstraints = constraints && constraints.length ? constraints : (existingPrompt.constraints || []);
   const finalAcceptance = acceptanceCriteria && acceptanceCriteria.length
     ? acceptanceCriteria
-    : (existingPrompt.acceptanceCriteria || []);
+    : (existingPrompt.acceptanceCriteria || (scopeDraft ? scopeDraft.acceptanceCriteria : []) || []);
   const finalTest = testCommand || existingCommands.test || '(none)';
   const finalBuild = buildCommand || existingCommands.build || '(none)';
   const finalLint = lintCommand || existingCommands.lint || '(none)';
@@ -633,6 +661,105 @@ function logIteration(baseDir, iteration, data) {
 
 function writeState(repoRoot, data) {
   writeJson(path.join(repoRoot, '.codex', 'state.json'), data);
+}
+
+function extractJsonObject(text) {
+  if (!text) return null;
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  const candidate = text.slice(start, end + 1);
+  try {
+    return JSON.parse(candidate);
+  } catch (err) {
+    return null;
+  }
+}
+
+function normalizeScopeDraft(draft) {
+  if (!draft || typeof draft !== 'object') return null;
+  const toArray = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (typeof value === 'string') {
+      return value.split(',').map((item) => item.trim()).filter(Boolean);
+    }
+    return [];
+  };
+  return {
+    inScope: toArray(draft.inScope),
+    outScope: toArray(draft.outScope),
+    acceptanceCriteria: toArray(draft.acceptanceCriteria || draft.acceptance),
+    commands: {
+      test: draft.commands && draft.commands.test ? String(draft.commands.test).trim() : '',
+      build: draft.commands && draft.commands.build ? String(draft.commands.build).trim() : '',
+      lint: draft.commands && draft.commands.lint ? String(draft.commands.lint).trim() : ''
+    }
+  };
+}
+
+async function runScopeAssist({ repoRoot, config, projectType, goal, existing }) {
+  const os = require('os');
+  const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-loop-scope-'));
+  const add = git(['worktree', 'add', '--detach', tmpBase, 'HEAD'], { cwd: repoRoot });
+  if (add.status !== 0) {
+    console.warn(add.stderr || 'Failed to create worktree for scope assist.');
+    return null;
+  }
+
+  const contextLines = [];
+  if (existing && existing.inScope && existing.inScope.length) {
+    contextLines.push(`Existing in-scope: ${existing.inScope.join(', ')}`);
+  }
+  if (existing && existing.outScope && existing.outScope.length) {
+    contextLines.push(`Existing out-of-scope: ${existing.outScope.join(', ')}`);
+  }
+
+  const prompt = [
+    'You are helping draft scope for a coding task.',
+    `Project type: ${projectType}`,
+    `Goal: ${goal}`,
+    contextLines.length ? contextLines.join('\\n') : 'No existing scope provided.',
+    '',
+    'Return ONLY a JSON object with this shape:',
+    '{',
+    '  "inScope": ["..."],',
+    '  "outScope": ["..."],',
+    '  "acceptanceCriteria": ["..."],',
+    '  "commands": { "test": "...", "build": "...", "lint": "..." }',
+    '}',
+    '',
+    'Rules:',
+    '- Do not modify any files.',
+    '- Do not run commands.',
+    '- Output JSON only, no markdown.'
+  ].join('\\n');
+
+  const args = ['exec', '--full-auto', '--cd', tmpBase, '--output-last-message'];
+  if (config.codex.model) args.push('--model', config.codex.model);
+  if (config.codex.sandbox) args.push('--sandbox', config.codex.sandbox);
+  if (config.codex.search) args.push('--search');
+
+  const result = run(config.codex.path, args, {
+    cwd: tmpBase,
+    input: prompt,
+    maxBuffer: 20 * 1024 * 1024
+  });
+
+  const output = (result.stdout || '').trim();
+  const parsed = extractJsonObject(output);
+
+  const remove = git(['worktree', 'remove', '--force', tmpBase], { cwd: repoRoot });
+  if (remove.status !== 0) {
+    console.warn(remove.stderr || 'Failed to remove scope assist worktree.');
+  }
+
+  if (!parsed) {
+    console.warn('Scope assist did not return valid JSON. Skipping suggestions.');
+    return null;
+  }
+
+  return normalizeScopeDraft(parsed);
 }
 
 async function main() {

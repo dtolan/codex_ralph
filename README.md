@@ -54,6 +54,10 @@ node src/cli.js --run-loop
 
 Tip: For prompt-builder questions, enter `?` to display a short help summary and a link to the full description.
 
+## Scope Assist (Prompt Builder)
+
+By default, the prompt builder asks whether to use Codex to draft **In‑Scope**, **Out‑of‑Scope**, and **Acceptance Criteria**. If you say yes, codex-loop runs Codex in a temporary git worktree and uses its JSON output to prefill those fields. You can still edit or replace the suggestions.
+
 ## How It Works (Planned)
 
 1. Repo detection
