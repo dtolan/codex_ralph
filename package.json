@@ -4,7 +4,7 @@
   "description": "Codex loop CLI for iterative, logged runs",
   "license": "MIT",
   "bin": {
-    "codex-loop": "src/cli.js"
+    "codex-loop": "bin/codex-loop.js"
   },
   "files": [
     "src",

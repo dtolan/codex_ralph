@@ -27,6 +27,10 @@ npx codex-loop --dry-run
 npm install
 node src/cli.js --dry-run
 
+# run via local shim after npm link
+npm link
+codex-loop --dry-run
+
 # build/update prompt only
 node src/cli.js --prompt-only
 
