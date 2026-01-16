@@ -670,6 +670,14 @@ function formatCommand(cmd, args) {
   return parts.join(' ');
 }
 
+function resolveCodexPath(config) {
+  const configured = config.codex.path || 'codex';
+  if (process.platform === 'win32' && configured === 'codex') {
+    return 'codex.cmd';
+  }
+  return configured;
+}
+
 function ensureLogDirs(repoRoot, config, runId) {
   const baseDir = path.join(repoRoot, config.logging.dir, runId);
   fs.mkdirSync(baseDir, { recursive: true });
@@ -767,7 +775,7 @@ async function runScopeAssist({ repoRoot, config, projectType, goal, existing })
   if (config.codex.sandbox) args.push('--sandbox', config.codex.sandbox);
   if (config.codex.search) args.push('--search');
 
-  const result = run(config.codex.path, args, {
+  const result = run(resolveCodexPath(config), args, {
     cwd: tmpBase,
     input: prompt,
     maxBuffer: 20 * 1024 * 1024
@@ -882,7 +890,7 @@ Defaults mode behavior:
       derived = {
         repoRoot,
         branch,
-        codexCommand: formatCommand(config.codex.path, codexArgs)
+        codexCommand: formatCommand(resolveCodexPath(config), codexArgs)
       };
     }
     console.log(JSON.stringify({ config, derived }, null, 2));
@@ -950,7 +958,7 @@ Defaults mode behavior:
 
   if (dryRun) {
     const codexArgs = prepareCodexArgs(config, repoInfo.repoRoot);
-    console.log('[dry-run] codex command:', formatCommand(config.codex.path, codexArgs));
+    console.log('[dry-run] codex command:', formatCommand(resolveCodexPath(config), codexArgs));
     console.log('[dry-run] loop iterations:', config.loop.maxLoops);
     console.log('[dry-run] prompt path:', promptResult ? promptResult.promptPath : promptPath);
     console.log('[dry-run] logs dir:', logsRoot);
@@ -986,7 +994,7 @@ Defaults mode behavior:
 
   for (let i = 1; i <= config.loop.maxLoops; i += 1) {
     const codexArgs = prepareCodexArgs(config, repoInfo.repoRoot);
-    const result = run(config.codex.path, codexArgs, {
+    const result = run(resolveCodexPath(config), codexArgs, {
       cwd: repoInfo.repoRoot,
       input: promptText,
       maxBuffer: 20 * 1024 * 1024
