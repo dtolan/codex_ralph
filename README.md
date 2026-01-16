@@ -35,8 +35,9 @@ Safety default: codex-loop will run Codex in `--full-auto` mode scoped to the re
    - `--yolo` is blocked unless `--force-yolo` is provided, with a loud warning.
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
 6. Git check-in
-   - After each iteration, stage and commit changes to preserve an audit trail.
-   - Commit messages should include the iteration number and a short summary.
+   - After each iteration, run `git status --porcelain` to detect changes.
+   - If there are tracked changes, stage and commit to preserve an audit trail.
+   - Commit message format: `codex-loop: iter <n> - <short summary>`.
 7. Logging
    - Logs per-iteration output and diffs to `.codex_logs/<run-id>/`.
 
@@ -80,15 +81,19 @@ EXIT_MESSAGE: "All parameters and tests have completed successfully"
 - `.codex_logs/<run-id>/`
   - Iteration logs, prompt snapshot, git diffs
 
+Note: `.codex/state.json` is local-only and should not be committed, while `.codex_logs/` should be committed for traceability.
+
 ## Stop Conditions (Planned)
 
 The loop stops when any of these are met:
-- The completion promise is detected in Codex output.
+- `PROMISE: true` is detected in Codex output.
 - Tests pass (per configured command).
 - No tracked file changes are present.
 - Max loops reached.
 
 Untracked files do not block completion.
+
+Safety note: `--full-auto` still runs commands without prompts. Keep test/build commands scoped to known scripts and avoid destructive operations.
 
 ## Status
 
