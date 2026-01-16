@@ -1,0 +1,20 @@
+﻿{
+  "name": "codex-loop",
+  "version": "0.1.0",
+  "description": "Codex loop CLI for iterative, logged runs",
+  "license": "MIT",
+  "bin": {
+    "codex-loop": "src/cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "lint": "node -c src/cli.js"
+  },
+  "dependencies": {
+    "minimist": "^1.2.8",
+    "prompts": "^2.4.2"
+  }
+}

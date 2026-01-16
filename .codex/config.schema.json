@@ -1,0 +1,86 @@
+﻿{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "codex-loop config",
+  "type": "object",
+  "properties": {
+    "version": { "type": "integer" },
+    "codex": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "model": { "type": "string" },
+        "fullAuto": { "type": "boolean" },
+        "yolo": { "type": "boolean" },
+        "forceYolo": { "type": "boolean" },
+        "sandbox": { "type": "string" },
+        "search": { "type": "boolean" },
+        "extraArgs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "properties": {
+        "requireConfirm": { "type": "boolean" },
+        "warnIfDirty": { "type": "boolean" },
+        "warnIfNonDefaultBranch": { "type": "boolean" },
+        "confirmIfNoRemote": { "type": "boolean" }
+      }
+    },
+    "branch": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "prefix": { "type": "string" },
+        "pattern": { "type": "string" },
+        "useCurrentBranchAsBase": { "type": "boolean" }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "templatePath": { "type": "string" },
+        "immutableDuringRun": { "type": "boolean" },
+        "completionKey": { "type": "string" },
+        "completionValue": { "type": ["boolean", "string", "number"] },
+        "exitMessageKey": { "type": "string" }
+      }
+    },
+    "loop": {
+      "type": "object",
+      "properties": {
+        "maxLoops": { "type": "integer" },
+        "confirmMaxLoops": { "type": "boolean" },
+        "stopOnPromise": { "type": "boolean" },
+        "stopOnTestsPass": { "type": "boolean" },
+        "stopOnNoDiff": { "type": "boolean" },
+        "ignoreUntrackedForNoDiff": { "type": "boolean" }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "properties": {
+        "test": { "type": "string" },
+        "build": { "type": "string" },
+        "lint": { "type": "string" }
+      }
+    },
+    "git": {
+      "type": "object",
+      "properties": {
+        "commitEachIteration": { "type": "boolean" },
+        "commitMessageTemplate": { "type": "string" },
+        "stageOnCommit": { "type": "string", "enum": ["tracked", "all"] },
+        "allowEmptyCommit": { "type": "boolean" }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "dir": { "type": "string" },
+        "commitLogs": { "type": "boolean" },
+        "writeJson": { "type": "boolean" }
+      }
+    }
+  }
+}

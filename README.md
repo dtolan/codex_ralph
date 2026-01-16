@@ -74,6 +74,7 @@ Location: `.codex/CODEX_PROMPT.md`
 Key properties:
 - Immutable during a run (the loop reuses the same prompt each iteration).
 - Includes a machine-readable completion block and an escape hatch.
+The default template lives at `.codex/CODEX_PROMPT.template.md`.
 
 Example footer:
 
@@ -86,6 +87,8 @@ EXIT_MESSAGE: "All parameters and tests have completed successfully"
 
 - `.codex/config.json`
   - Default settings (model, sandbox, search, max loops, test command)
+- `.codex/config.schema.json`
+  - JSON schema for validating config files
 - `.codex/state.json`
   - Last run state (repo, branch, prompt metadata, last run id)
 - `.codex_logs/<run-id>/`

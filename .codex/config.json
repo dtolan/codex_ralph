@@ -1,0 +1,57 @@
+﻿{
+  "version": 1,
+  "codex": {
+    "path": "codex",
+    "model": "gpt-5",
+    "fullAuto": true,
+    "yolo": false,
+    "forceYolo": false,
+    "sandbox": "workspace-write",
+    "search": false,
+    "extraArgs": []
+  },
+  "repo": {
+    "requireConfirm": true,
+    "warnIfDirty": true,
+    "warnIfNonDefaultBranch": true,
+    "confirmIfNoRemote": true
+  },
+  "branch": {
+    "create": true,
+    "prefix": "",
+    "pattern": "codex-YYYYMMDD-HHMMSS",
+    "useCurrentBranchAsBase": true
+  },
+  "prompt": {
+    "path": ".codex/CODEX_PROMPT.md",
+    "templatePath": ".codex/CODEX_PROMPT.template.md",
+    "immutableDuringRun": true,
+    "completionKey": "PROMISE",
+    "completionValue": true,
+    "exitMessageKey": "EXIT_MESSAGE"
+  },
+  "loop": {
+    "maxLoops": 20,
+    "confirmMaxLoops": true,
+    "stopOnPromise": true,
+    "stopOnTestsPass": false,
+    "stopOnNoDiff": false,
+    "ignoreUntrackedForNoDiff": true
+  },
+  "commands": {
+    "test": "",
+    "build": "",
+    "lint": ""
+  },
+  "git": {
+    "commitEachIteration": true,
+    "commitMessageTemplate": "codex-loop: iter {n} - {summary}",
+    "stageOnCommit": "tracked",
+    "allowEmptyCommit": false
+  },
+  "logging": {
+    "dir": ".codex_logs",
+    "commitLogs": false,
+    "writeJson": true
+  }
+}
