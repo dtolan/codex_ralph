@@ -474,7 +474,8 @@ async function maybeCreateBranch(repoRoot, config, dryRun, defaultsMode) {
   return branchName;
 }
 
-async function buildPrompt(repoRoot, branch, config, defaultsMode) {
+async function buildPrompt(repoRoot, branch, config, defaultsMode, options = {}) {
+  const { writePrompt = true } = options;
   const templatePath = path.join(repoRoot, config.prompt.templatePath);
   const template = fs.existsSync(templatePath)
     ? fs.readFileSync(templatePath, 'utf8')
@@ -636,10 +637,12 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
 
   const rendered = renderTemplate(template, data);
   const promptPath = path.join(repoRoot, config.prompt.path);
-  fs.mkdirSync(path.dirname(promptPath), { recursive: true });
-  fs.writeFileSync(promptPath, rendered);
+  if (writePrompt) {
+    fs.mkdirSync(path.dirname(promptPath), { recursive: true });
+    fs.writeFileSync(promptPath, rendered);
+  }
 
-  return { promptPath, maxLoops, commands: { test: finalTest, build: finalBuild, lint: finalLint } };
+  return { promptPath, maxLoops, commands: { test: finalTest, build: finalBuild, lint: finalLint }, rendered };
 }
 
 function parsePromise(output, key = 'PROMISE') {
@@ -934,10 +937,13 @@ Defaults mode behavior:
       }
     }
 
-    promptResult = await buildPrompt(repoInfo.repoRoot, branch, config, defaultsMode);
+    promptResult = await buildPrompt(repoInfo.repoRoot, branch, config, defaultsMode, { writePrompt: !dryRun });
     config.loop.maxLoops = promptResult.maxLoops;
     config.commands = { ...config.commands, ...promptResult.commands };
-    promptText = fs.readFileSync(promptResult.promptPath, 'utf8');
+    promptText = promptResult.rendered || '';
+    if (!promptText) {
+      promptText = fs.readFileSync(promptResult.promptPath, 'utf8');
+    }
   }
   const runId = formatTimestamp();
   const logsRoot = path.join(repoInfo.repoRoot, config.logging.dir, runId);

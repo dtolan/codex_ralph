@@ -81,7 +81,7 @@ If Codex returns markdown instead of JSON, codex-loop will attempt to parse head
    - Defaults to `--full-auto` and `--cd <repo-root>` to keep changes inside the repo.
    - `--yolo` is blocked unless `--force-yolo` is provided, with a loud warning.
    - Use `--defaults` for non-interactive runs (auto-confirms prompts and uses config defaults).
-   - Use `--dry-run` to generate the prompt and show the codex command without executing or committing.
+   - Use `--dry-run` to preview the prompt and show the codex command without executing, committing, or writing prompt/log files.
    - Use `--print-config` to output the effective config plus derived repo/branch and codex command.
    - Use `--prompt-only` to update the prompt and exit.
    - Use `--run-loop` to run with the existing prompt.
@@ -102,7 +102,7 @@ If Codex returns markdown instead of JSON, codex-loop will attempt to parse head
 # default run (interactive)
 codex-loop
 
-# preview what would run (skips codex execution and git commits)
+# preview what would run (skips codex execution, commits, and prompt writes)
 codex-loop --dry-run
 
 # build/update the prompt only
