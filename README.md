@@ -38,6 +38,7 @@ The CLI will still ask for confirmation before starting a loop, even if defaults
    - Runs `codex exec` in a fresh iteration each time.
    - Defaults to `--full-auto` and `--cd <repo-root>` to keep changes inside the repo.
    - `--yolo` is blocked unless `--force-yolo` is provided, with a loud warning.
+   - Use `--dry-run` to generate the prompt and show the codex command without executing or committing.
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
 6. Git check-in
    - After each iteration, run `git status --porcelain` to detect changes.
@@ -53,6 +54,9 @@ The CLI will still ask for confirmation before starting a loop, even if defaults
 ```bash
 # default run (interactive)
 codex-loop
+
+# preview what would run (skips codex execution and git commits)
+codex-loop --dry-run
 
 # with explicit loop limit and codex flags
 codex-loop --max-loops 50 --model gpt-5 --sandbox --search

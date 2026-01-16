@@ -305,7 +305,7 @@ async function confirmRepo(repoRoot, config) {
   return { repoRoot, branch };
 }
 
-async function maybeCreateBranch(repoRoot, config) {
+async function maybeCreateBranch(repoRoot, config, dryRun) {
   let currentBranch = 'unknown';
   const branchResult = git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot });
   if (branchResult.status === 0) currentBranch = branchResult.stdout.trim();
@@ -329,10 +329,14 @@ async function maybeCreateBranch(repoRoot, config) {
   const timestamp = formatTimestamp();
   const branchName = `${prefix ? `${prefix.trim()}/` : ''}${config.branch.pattern.replace('YYYYMMDD-HHMMSS', timestamp)}`;
 
-  const checkout = git(['checkout', '-b', branchName], { cwd: repoRoot });
-  if (checkout.status !== 0) {
-    console.error(checkout.stderr || 'Failed to create branch.');
-    process.exit(1);
+  if (dryRun) {
+    console.log(`[dry-run] would create branch ${branchName} (base: ${currentBranch})`);
+  } else {
+    const checkout = git(['checkout', '-b', branchName], { cwd: repoRoot });
+    if (checkout.status !== 0) {
+      console.error(checkout.stderr || 'Failed to create branch.');
+      process.exit(1);
+    }
   }
 
   return branchName;
@@ -464,6 +468,11 @@ function prepareCodexArgs(config, repoRoot) {
   return args;
 }
 
+function formatCommand(cmd, args) {
+  const parts = [cmd, ...args].map((part) => (part.includes(' ') ? `"${part}"` : part));
+  return parts.join(' ');
+}
+
 function ensureLogDirs(repoRoot, config, runId) {
   const baseDir = path.join(repoRoot, config.logging.dir, runId);
   fs.mkdirSync(baseDir, { recursive: true });
@@ -481,11 +490,12 @@ function logIteration(baseDir, iteration, data) {
 
 async function main() {
   const argv = minimist(process.argv.slice(2), {
-    boolean: ['yolo', 'force-yolo', 'search', 'log-commit'],
+    boolean: ['yolo', 'force-yolo', 'search', 'log-commit', 'dry-run'],
     string: ['model', 'sandbox', 'codex-path', 'max-loops']
   });
 
   let config = deepMerge({}, DEFAULT_CONFIG);
+  const dryRun = argv['dry-run'] === true;
 
   const repoRoot = await resolveRepoRoot(process.cwd(), config);
   const repoConfigPath = path.join(repoRoot, '.codex', 'config.json');
@@ -506,14 +516,23 @@ async function main() {
     process.exit(1);
   }
 
-  ensureGitignore(repoRoot, ['.codex/state.json', '.codex_logs/']);
-  fs.mkdirSync(path.join(repoRoot, '.codex'), { recursive: true });
-  if (!fs.existsSync(repoConfigPath)) {
-    writeJson(repoConfigPath, config);
+  if (!dryRun) {
+    ensureGitignore(repoRoot, ['.codex/state.json', '.codex_logs/']);
+    fs.mkdirSync(path.join(repoRoot, '.codex'), { recursive: true });
+    if (!fs.existsSync(repoConfigPath)) {
+      writeJson(repoConfigPath, config);
+    }
+  } else {
+    const gitignorePath = path.join(repoRoot, '.gitignore');
+    const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf8') : '';
+    const missing = ['.codex/state.json', '.codex_logs/'].filter((entry) => !existing.includes(entry));
+    if (missing.length > 0) {
+      console.log(`[dry-run] .gitignore missing: ${missing.join(', ')}`);
+    }
   }
 
   const repoInfo = await confirmRepo(repoRoot, config);
-  const branch = await maybeCreateBranch(repoInfo.repoRoot, config);
+  const branch = await maybeCreateBranch(repoInfo.repoRoot, config, dryRun);
 
   const promptExists = fs.existsSync(path.join(repoInfo.repoRoot, config.prompt.path));
   if (promptExists) {
@@ -535,7 +554,19 @@ async function main() {
 
   const promptText = fs.readFileSync(promptResult.promptPath, 'utf8');
   const runId = formatTimestamp();
-  const logsRoot = ensureLogDirs(repoInfo.repoRoot, config, runId);
+  const logsRoot = path.join(repoInfo.repoRoot, config.logging.dir, runId);
+
+  if (dryRun) {
+    const codexArgs = prepareCodexArgs(config, repoInfo.repoRoot);
+    console.log('[dry-run] codex command:', formatCommand(config.codex.path, codexArgs));
+    console.log('[dry-run] loop iterations:', config.loop.maxLoops);
+    console.log('[dry-run] prompt path:', promptResult.promptPath);
+    console.log('[dry-run] logs dir:', logsRoot);
+    console.log('[dry-run] skipping codex execution and git commits.');
+    return;
+  }
+
+  ensureLogDirs(repoInfo.repoRoot, config, runId);
   logIteration(logsRoot, 0, { prompt: promptText, meta: { runId, branch } });
 
   for (let i = 1; i <= config.loop.maxLoops; i += 1) {
