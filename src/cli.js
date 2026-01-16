@@ -527,6 +527,7 @@ async function buildPrompt(repoRoot, branch, config, defaultsMode) {
 
   let scopeDraft = null;
   if (useScopeAssist) {
+    console.log('Running scope assist with Codex...');
     scopeDraft = await runScopeAssist({
       repoRoot,
       config,
@@ -738,9 +739,10 @@ async function runScopeAssist({ repoRoot, config, projectType, goal, existing })
   }
 
   const prompt = [
+    goal,
+    '',
     'You are helping draft scope for a coding task.',
     `Project type: ${projectType}`,
-    `Goal: ${goal}`,
     contextLines.length ? contextLines.join('\\n') : 'No existing scope provided.',
     '',
     'Return ONLY a JSON object with this shape:',
