@@ -38,10 +38,11 @@ The CLI will still ask for confirmation before starting a loop, even if defaults
    - Runs `codex exec` in a fresh iteration each time.
    - Defaults to `--full-auto` and `--cd <repo-root>` to keep changes inside the repo.
    - `--yolo` is blocked unless `--force-yolo` is provided, with a loud warning.
+   - Use `--defaults` for non-interactive runs (auto-confirms prompts and uses config defaults).
    - Use `--dry-run` to generate the prompt and show the codex command without executing or committing.
+   - Use `--print-config` to output the effective config plus derived repo/branch and codex command.
    - Use `--prompt-only` to update the prompt and exit.
    - Use `--run-loop` to run with the existing prompt; add `--update-prompt` to rebuild it first.
-   - Use `--defaults` for non-interactive runs (auto-confirms prompts and uses config defaults).
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
 6. Git check-in
    - After each iteration, run `git status --porcelain` to detect changes.
@@ -73,7 +74,7 @@ codex-loop --update-prompt
 # non-interactive defaults (auto-confirms, uses config + defaults)
 codex-loop --defaults
 
-# print effective config and exit
+# print effective config plus derived repo/branch and codex command
 codex-loop --print-config
 
 # with explicit loop limit and codex flags

@@ -590,7 +590,21 @@ Defaults mode behavior:
   if (argv['log-commit']) config.logging.commitLogs = true;
 
   if (argv['print-config']) {
-    console.log(JSON.stringify(config, null, 2));
+    let derived = {};
+    const cwd = process.cwd();
+    const gitRoot = git(['rev-parse', '--show-toplevel'], { cwd });
+    if (gitRoot.status === 0) {
+      const repoRoot = gitRoot.stdout.trim();
+      const branchResult = git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot });
+      const branch = branchResult.status === 0 ? branchResult.stdout.trim() : null;
+      const codexArgs = prepareCodexArgs(config, repoRoot);
+      derived = {
+        repoRoot,
+        branch,
+        codexCommand: formatCommand(config.codex.path, codexArgs)
+      };
+    }
+    console.log(JSON.stringify({ config, derived }, null, 2));
     process.exit(0);
   }
 
