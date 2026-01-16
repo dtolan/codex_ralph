@@ -59,7 +59,8 @@ node src/cli.js --run-loop
    - Use `--dry-run` to generate the prompt and show the codex command without executing or committing.
    - Use `--print-config` to output the effective config plus derived repo/branch and codex command.
    - Use `--prompt-only` to update the prompt and exit.
-   - Use `--run-loop` to run with the existing prompt; add `--update-prompt` to rebuild it first.
+   - Use `--run-loop` to run with the existing prompt.
+   - Use `--update-prompt` to rebuild the prompt before running.
    - Stops when completion signal is detected, tests pass, no tracked diffs, or max loops reached.
 6. Git check-in
    - After each iteration, run `git status --porcelain` to detect changes.

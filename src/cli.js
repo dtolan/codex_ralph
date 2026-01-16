@@ -174,7 +174,7 @@ function firstLineSummary(text) {
 
 function defaultAnswer(question) {
   if (question.type === 'confirm') {
-    return question.initial !== undefined ? question.initial : true;
+    return true;
   }
   if (question.type === 'select') {
     if (question.initial !== undefined) return question.initial;
@@ -649,7 +649,7 @@ Defaults mode behavior:
         name: 'updatePrompt',
         message: 'Prompt file exists. Update it now?',
         initial: true
-      });
+      }, defaultsMode);
       if (!updatePrompt) {
         console.error('Prompt update required to continue.');
         process.exit(1);
