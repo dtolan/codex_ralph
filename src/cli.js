@@ -277,6 +277,28 @@ function parseExistingPrompt(promptText) {
   };
 }
 
+function parseScopeFromMarkdown(text) {
+  if (!text) return null;
+  const inScope = parseBullets(extractSection(text, 'In Scope'));
+  const outScope = parseBullets(extractSection(text, 'Out of Scope'));
+  const acceptance = parseBullets(extractSection(text, 'Acceptance Criteria'));
+  const commandsSection = extractSection(text, 'Commands') || extractSection(text, 'Suggested Commands');
+  const testMatch = commandsSection.match(/-\\s*Test:\\s*(.+)/i);
+  const buildMatch = commandsSection.match(/-\\s*Build:\\s*(.+)/i);
+  const lintMatch = commandsSection.match(/-\\s*Lint:\\s*(.+)/i);
+  if (inScope.length === 0 && outScope.length === 0 && acceptance.length === 0 && !commandsSection) return null;
+  return normalizeScopeDraft({
+    inScope,
+    outScope,
+    acceptanceCriteria: acceptance,
+    commands: {
+      test: testMatch ? testMatch[1].trim() : '',
+      build: buildMatch ? buildMatch[1].trim() : '',
+      lint: lintMatch ? lintMatch[1].trim() : ''
+    }
+  });
+}
+
 async function resolveRepoRoot(cwd, config, defaultsMode) {
   const gitRoot = git(['rev-parse', '--show-toplevel'], { cwd });
   if (gitRoot.status === 0) {
@@ -746,8 +768,15 @@ async function runScopeAssist({ repoRoot, config, projectType, goal, existing })
     maxBuffer: 20 * 1024 * 1024
   });
 
+  if (result.error) {
+    console.warn(`Scope assist failed to run Codex: ${result.error.message}`);
+  }
+
   const output = (result.stdout || '').trim();
-  const parsed = extractJsonObject(output);
+  let parsed = extractJsonObject(output);
+  if (!parsed) {
+    parsed = parseScopeFromMarkdown(output);
+  }
 
   const remove = git(['worktree', 'remove', '--force', tmpBase], { cwd: repoRoot });
   if (remove.status !== 0) {
@@ -755,7 +784,11 @@ async function runScopeAssist({ repoRoot, config, projectType, goal, existing })
   }
 
   if (!parsed) {
-    console.warn('Scope assist did not return valid JSON. Skipping suggestions.');
+    const stderr = (result.stderr || '').trim();
+    console.warn('Scope assist did not return valid JSON or markdown. Skipping suggestions.');
+    if (stderr) {
+      console.warn(`Scope assist stderr: ${stderr.split(/\r?\n/).slice(-5).join('\n')}`);
+    }
     return null;
   }
 
