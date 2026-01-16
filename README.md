@@ -23,6 +23,10 @@ The CLI will still ask for confirmation before starting a loop, even if defaults
 # run via npx (once published)
 npx codex-loop --dry-run
 
+# install directly from GitHub (no npm publish)
+npm install -g git+https://github.com/dtolan/codex_ralph.git
+codex-loop --dry-run
+
 # run locally from this repo
 npm install
 node src/cli.js --dry-run
